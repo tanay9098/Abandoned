@@ -32,6 +32,96 @@ Leave *“Start with sample case files”* ticked to meet a ghost immediately an
 
 Playwright uses its own browser download; in restricted sandboxes set `PW_CHROMIUM_PATH` to a Chromium binary.
 
+## Run locally (step by step)
+
+**Prerequisite:** Node.js **22.18 or newer** (`node -v`). The migration script is TypeScript run natively by Node, which needs ≥ 22.18.
+
+### 1. Create your local env file
+
+Every setting is optional for local development. To change any of them, copy the template:
+
+```bash
+cp .env.example .env.local
+```
+
+Next.js loads `.env.local` automatically (it is git-ignored). Restart `npm run dev` after editing it, because env vars are
+read at startup. In development, `SESSION_SECRET` and `CRON_SECRET` may stay empty; a dev-only secret is used.
+
+### 2. Make the ghost speak with local Gemma (Ollama)
+
+1. Install [Ollama](https://ollama.com/download) and make sure it is running (`ollama serve`, or the desktop app).
+2. Pull the model (~3 GB): `ollama pull gemma3:4b`
+3. Check that the OpenAI-compatible endpoint answers:
+
+   ```bash
+   curl http://localhost:11434/v1/chat/completions -H "content-type: application/json" \
+     -d '{"model":"gemma3:4b","messages":[{"role":"user","content":"Say hello like a gentle ghost."}]}'
+   ```
+
+4. In `.env.local` set:
+
+   ```
+   AI_BASE_URL=http://localhost:11434/v1
+   AI_MODEL=gemma3:4b
+   AI_TIMEOUT_MS=15000
+   ```
+
+   (`AI_API_KEY` stays empty: Ollama needs none. The 15 s timeout allows for CPU inference; the default is 4 s.)
+5. Restart `npm run dev`. Archives started with *sample case files* have AI dialogue on already; otherwise turn on
+   **Settings → AI-written dialogue**.
+6. Open an overdue task so its ghost panel shows. The first line can take a few seconds while Ollama loads the model.
+
+### 3. Check that Gemma is really being used
+
+If AI isn't configured, is off in Settings, times out, or returns a line that fails validation, the ghost **silently falls back
+to built-in lines**, so the app looks the same either way. To confirm:
+
+* **Browser DevTools → Network:** opening a haunted task sends `POST /api/hauntings/<id>/dialogue`. The response shows
+  `"source": "ai"` (Gemma wrote it) or `"source": "fallback"` (built-in line).
+* **Ollama side:** `ollama ps` lists `gemma3:4b` as loaded after a request, and the `ollama serve` log shows a
+  `POST /v1/chat/completions` line.
+* An AI-written line is saved once per haunting and reused, so the same ghost keeps its words. Fallback lines are not saved, so after
+  fixing the config, reopening the task retries Gemma.
+
+If you keep getting `fallback`: check that `AI_BASE_URL` ends in `/v1` with no trailing path, that the model name matches
+`ollama list` exactly, raise `AI_TIMEOUT_MS`, and note the limit of 20 AI requests per user per hour.
+
+### 4. (Optional) Use a real local PostgreSQL instead of PGlite
+
+By default the app uses PGlite, an embedded Postgres in `.data/pglite` that migrates itself. To run against a real Postgres
+(closer to production):
+
+```bash
+docker run -d --name abandonment-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=abandonment -p 5432:5432 postgres:17
+```
+
+Add to `.env.local`:
+
+```
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/abandonment
+```
+
+Apply the migrations (`db:migrate` reads the shell environment, not `.env.local`, so pass the URL inline), then start the app:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/abandonment npm run db:migrate
+npm run dev
+```
+
+SSL is disabled automatically for `localhost` URLs. A Supabase connection string works the same way.
+
+### 5. Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Want a fresh start / corrupted local data | Stop the dev server, `rm -rf .data/pglite`, start again. Clear the site's cookies for `localhost:3000` (or use a private window) and enter the archive again. |
+| Port 3000 already in use | `npm run dev -- -p 3001`. If you use Google Calendar, also change `GOOGLE_REDIRECT_URI` and the redirect URI in Google Cloud Console to port 3001. |
+| Google: `Error 400: redirect_uri_mismatch` | `GOOGLE_REDIRECT_URI` must match an *Authorised redirect URI* in your OAuth client **exactly** (scheme, host, port, path), e.g. `http://localhost:3000/api/calendar/callback`. Use `localhost`, not `127.0.0.1`, unless you registered that too. |
+| Google: "access blocked" / app not verified | While the OAuth consent screen is in *Testing*, add your Google account under **Test users**. |
+| Calendar page shows the demo calendar | Expected when `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` aren't all set (or `GOOGLE_CALENDAR_MOCK=1`). Also set `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`). |
+| `npm run db:migrate` says `DATABASE_URL is not set` | Pass it inline as shown in step 4. Not needed at all for PGlite. |
+| Env change has no effect | Restart `npm run dev`. |
+
 ## Production setup
 
 1. **Database (Supabase / any PostgreSQL):** set `DATABASE_URL`, then `npm run db:migrate`.
