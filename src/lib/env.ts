@@ -11,8 +11,11 @@ const schema = z.object({
   GOOGLE_REDIRECT_URI: z.string().optional(),
   GOOGLE_CALENDAR_MOCK: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().optional(),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default("claude-haiku-5-5"),
+  // Optional ghost dialogue from an open-weight model via any OpenAI-compatible endpoint (Ollama, Google AI Studio, HF...).
+  AI_BASE_URL: z.string().optional(),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default("gemma3:4b"),
+  AI_TIMEOUT_MS: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().positive().default(4000)),
   ABANDONMENT_ALLOW_TEST_CLOCK: z.string().optional(),
 });
 

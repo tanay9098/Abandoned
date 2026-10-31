@@ -94,7 +94,7 @@ export default function SettingsPage() {
         <section aria-labelledby="s-ai" className="py-2">
           <h2 id="s-ai" className="meta pt-3">Ghost dialogue</h2>
           <Row id="ai" title="AI-written dialogue" control={<Switch id="ai" checked={p.aiDialogueEnabled} onCheckedChange={(v) => save({ aiDialogueEnabled: v })} />}>
-            Off by default. If you turn it on (and the server has a provider key), only the task title and how long it has been overdue are sent to the provider — never descriptions or Calendar content. Without it, the ghost uses built-in lines.
+            Off by default. If you turn it on (and the server has a model configured), the ghost’s lines are written by an open-weight Gemma model. Only the task title and how long it has been overdue are sent to it — never descriptions or Calendar content. Without it, the ghost uses built-in lines.
           </Row>
         </section>
 

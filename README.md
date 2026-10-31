@@ -41,7 +41,7 @@ Playwright uses its own browser download; in restricted sandboxes set `PW_CHROMI
    1–5 minutes. Ready-made options: `.github/workflows/scheduler.yml` (set repo secrets `APP_URL`, `CRON_SECRET` and variable
    `SCHEDULER_ENABLED=true`), Vercel Cron (it issues `GET`, which is supported with the same bearer check), Supabase `pg_cron`
    + `pg_net`, or Cloud Scheduler. Both jobs are idempotent: late, repeated or overlapping runs never duplicate anything.
-4. **Hosting:** any Node host for Next.js 16 (Node ≥ 22.18).
+4. **Hosting:** any Node host for Next.js 16 (Node ≥ 22.18). A ready-made Render Blueprint is included — see *Deploying on Render*.
 
 ### Google Calendar (read-only)
 
@@ -58,11 +58,31 @@ and deletes imported event copies (your tasks and haunting history stay). Event 
 Without credentials the Calendar page offers a **demo calendar** (sample events, labelled everywhere as such). In production,
 the demo provider is off unless `GOOGLE_CALENDAR_MOCK=1`.
 
-### Optional AI ghost dialogue
+### Optional AI ghost dialogue (open-weight Gemma)
 
-Off by default and never required. To enable: set `ANTHROPIC_API_KEY` (model via `AI_MODEL`) and switch it on in **Settings**.
-Only the task *title* (treated as untrusted data) and a coarse overdue duration are sent — never descriptions or Calendar content.
-Output is length/tone-validated; any failure, timeout (4 s), rate-limit or unsafe reply falls back to built-in lines.
+Off by default and never required. The ghost's lines can be written by Google's open-weight **Gemma** model through any
+**OpenAI-compatible** Chat Completions endpoint, so the same code runs fully local or hosted:
+
+| Where | `AI_BASE_URL` | `AI_MODEL` | `AI_API_KEY` |
+|---|---|---|---|
+| Local, [Ollama](https://ollama.com) (`ollama pull gemma3:4b`) | `http://localhost:11434/v1` | `gemma3:4b` | — |
+| Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemma-3-27b-it` | AI Studio key |
+| Hugging Face Inference Providers | `https://router.huggingface.co/v1` | `google/gemma-3-27b-it` | HF token |
+
+llama.cpp `llama-server` and vLLM work the same way. Then switch it on in **Settings**. Local CPU inference is slower than the
+default 4 s timeout, so set `AI_TIMEOUT_MS=15000` there. Gemma has no system role, so the instructions travel in the single user turn,
+with the title fenced in `<task_title>` tags as untrusted data. Only the task *title* and a coarse overdue duration are sent —
+never descriptions or Calendar content. Output is length/tone-validated; any failure, timeout, rate-limit or unsafe reply falls back
+to built-in lines.
+
+### Deploying on Render
+
+`render.yaml` is a [Render Blueprint](https://render.com/docs/blueprint-spec): **New → Blueprint →** this repo. It creates a free
+Node web service and a free Render Postgres database (private network only), generates `SESSION_SECRET` and `CRON_SECRET`, runs
+migrations on start, enables the labelled demo calendar, and points the ghost at Gemma on Google AI Studio — paste your key into
+`AI_API_KEY` when prompted (or leave it empty for built-in lines). Free web services sleep when idle, and free Render Postgres
+expires after 30 days. For the scheduler, enable `.github/workflows/scheduler.yml` with `APP_URL` set to the `onrender.com` URL, or
+uncomment the Render cron job in `render.yaml` (paid plan).
 
 ## How it works
 

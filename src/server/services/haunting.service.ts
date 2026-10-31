@@ -105,7 +105,7 @@ export async function dialogueFor(db: Db, userId: string, eventId: string, now: 
 
   if (ev.eventType !== "deadline_missed") return fallback;
   const prefs = await readPreferences(db, userId);
-  if (!prefs.aiDialogueEnabled || (!ai.apiKey && !aiAvailable())) return fallback;
+  if (!prefs.aiDialogueEnabled || (!ai.baseUrl && !aiAvailable())) return fallback;
 
   const rl = rateLimit(`ai:${userId}`, 20, 3_600_000, now.getTime());
   if (!rl.ok) throw new AppError(429, "rate_limited", "The ghost needs a moment. Try again later.", { retryAfterSec: rl.retryAfterSec });

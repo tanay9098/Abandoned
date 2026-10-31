@@ -1,0 +1,76 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Dashboard → New → Blueprint → pick this repo. Render creates the web service and the Postgres database,
+# generates SESSION_SECRET / CRON_SECRET, and asks you for AI_API_KEY (marked sync: false).
+#
+# Ghost dialogue comes from Google's open-weight Gemma model through any OpenAI-compatible endpoint.
+# The defaults below use Google AI Studio (free key: https://aistudio.google.com/apikey). To use another
+# host instead, change AI_BASE_URL / AI_MODEL, e.g. Hugging Face: https://router.huggingface.co/v1 +
+# google/gemma-3-27b-it, or your own Ollama: https://<host>/v1 + gemma3:4b.
+# Leaving AI_API_KEY empty keeps the app fully working with its built-in lines.
+
+services:
+  - type: web
+    name: abandonment
+    runtime: node
+    plan: free
+    # Pre-deploy commands need a paid instance, so migrations run at start. They are idempotent
+    # (tracked in schema_migrations), so restarts are safe.
+    buildCommand: npm ci && npm run build
+    startCommand: npm run db:migrate && npm start
+    healthCheckPath: /login
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: abandonment-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true
+      # Open-weight AI (Gemma) via an OpenAI-compatible endpoint.
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: AI_MODEL
+        value: gemma-3-27b-it
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_TIMEOUT_MS
+        value: "8000"
+      # No Google OAuth client configured: show the clearly-labelled demo calendar instead of "unconfigured".
+      # Remove this and set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI / TOKEN_ENCRYPTION_KEY
+      # to use real (read-only) Google Calendar.
+      - key: GOOGLE_CALENDAR_MOCK
+        value: "1"
+
+  # Optional: server-side scheduler so deadlines and midnight reviews are processed while no browser is open.
+  # (The app also catches up on its own whenever it is opened.) Render cron jobs need a paid plan, so this is
+  # commented out; the free alternative is .github/workflows/scheduler.yml with APP_URL = your onrender.com URL.
+  #
+  # - type: cron
+  #   name: abandonment-scheduler
+  #   runtime: node
+  #   plan: starter
+  #   schedule: "*/5 * * * *"
+  #   buildCommand: "true"
+  #   startCommand: >-
+  #     curl -fsS -X POST "$APP_URL/api/jobs/process-deadlines" -H "Authorization: Bearer $CRON_SECRET" &&
+  #     curl -fsS -X POST "$APP_URL/api/jobs/midnight-review" -H "Authorization: Bearer $CRON_SECRET"
+  #   envVars:
+  #     - key: APP_URL
+  #       sync: false # e.g. https://abandonment.onrender.com
+  #     - key: CRON_SECRET
+  #       fromService:
+  #         type: web
+  #         name: abandonment
+  #         envVarKey: CRON_SECRET
+
+databases:
+  - name: abandonment-db
+    plan: free
+    databaseName: abandonment
+    user: abandonment
+    # Reachable only from services in this Render account (no public access).
+    ipAllowList: []
