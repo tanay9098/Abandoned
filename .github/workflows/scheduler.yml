@@ -1,0 +1,21 @@
+# Server-side scheduler: keeps deadlines and midnight reviews processing while no browser is open.
+# Works on any host. Requires repository secrets APP_URL (e.g. https://abandonment.example.com) and CRON_SECRET.
+# GitHub's cron is best-effort (minimum 5 minutes, may be delayed); both jobs are idempotent, so delays only
+# postpone a haunting — they never duplicate or lose one. Use a dedicated scheduler (Supabase pg_cron,
+# Vercel Cron, Cloud Scheduler) for tighter timing; see README.
+name: Scheduler
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    if: ${{ vars.SCHEDULER_ENABLED == 'true' }}
+    steps:
+      - name: Process deadlines
+        run: |
+          curl -fsS -X POST "${{ secrets.APP_URL }}/api/jobs/process-deadlines" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - name: Generate midnight reviews
+        run: |
+          curl -fsS -X POST "${{ secrets.APP_URL }}/api/jobs/midnight-review" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

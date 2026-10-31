@@ -624,3 +624,61 @@ Each record should contain:
 - Related commit hash, when available.
 
 Do not treat this document as a substitute for actual migrations, tests, or commit history.
+
+---
+
+## 12. As-Built Notes (2026-10-30)
+
+This section records where the implementation refines or extends the sections above. Sections 1–11 remain the specification; where they differ, this section describes what exists.
+
+### 12.1 Authentication and database access
+
+* **Auth:** signed `httpOnly` session cookie → `profiles` row (ADR-011). Only `server/auth/session.ts` and `server/http.ts` know about it. The browser never supplies a user id.
+* **DB:** hand-written SQL repositories over `Db`/`SqlExecutor`; `pg` for `DATABASE_URL` (Supabase/PostgreSQL), PGlite otherwise (ADR-012). The server connects with a privileged role and scopes every query by `user_id`; RLS (`auth.uid()`) is defence in depth for direct client access. `auth.uid()` is shimmed from `request.jwt.claim.sub` on non-Supabase Postgres.
+* **Migrations:** `supabase/migrations/NNNN_*.sql`, applied in order by `server/db/migrate.ts` (`schema_migrations`). `npm run db:migrate` for hosted DBs; PGlite self-migrates.
+
+### 12.2 Schema deltas relative to §5 (all additive)
+
+| Table | Addition | Why |
+|---|---|---|
+| `tasks` | `recurrence` (`daily|weekly|monthly`), `version` (int) | Simple recurrence (P1 subset); optimistic concurrency |
+| `tasks` | CHECK: timestamps must agree with `status`; CHECK: recurrence needs a deadline | Make inconsistent states unrepresentable |
+| `user_preferences` | `midnight_presentation` (`ritual|banner|off`), `ai_dialogue_enabled` | Design §12 “midnight review presentation”; AI opt-in/disclosure |
+| `calendar_connections` | `is_demo`; partial unique index `(user_id, provider) WHERE revoked_at IS NULL` | Label the demo provider; one active connection |
+| `calendar_events` | `all_day`, `reviewed_at`; status value `not_missed` | All-day handling; explicit “I was there” decision |
+| `ghost_events` | `acknowledged_at`; type `task_rescheduled`; unique `(user_id, dedupe_key)` | Acknowledge endpoint; reschedule history; scoped uniqueness |
+| `daily_reviews` | `presented_at`, `dismissed_at` | Present once, skippable, replayable |
+
+`calendar_connections` has **no** RLS policy for browser roles (default deny): it holds encrypted tokens. `ghost_events` has select/insert policies only (history is not editable through RLS-governed access); inserts must reference the caller’s own task/event rows.
+
+### 12.3 Idempotency keys
+
+| Event | Key |
+|---|---|
+| `deadline_missed` | `deadline_missed:<taskId>:<due_at epoch ms>` |
+| `midnight_review` | `midnight_review:<userId>:<localDate>` |
+| `task_completed` / `task_released` | `task_*:<taskId>:<timestamp ms>` |
+| `task_rescheduled` | `task_rescheduled:<taskId>:v<version>` |
+| `event_review` | `event_review:<calendarEventId>:<decision timestamp ms>` (a user may change their answer; each decision is history) |
+
+`deadline_missed.occurred_at` is the **deadline instant** (when the task became overdue); `created_at` is detection time. The payload carries a title snapshot so history stays readable after the task is deleted.
+
+### 12.4 API additions (see `memory.md` §7 for the ledger)
+
+`POST /api/auth/guest|logout` · `POST /api/hauntings/reconcile` · `POST /api/hauntings/:id/dialogue` · `POST /api/hauntings/midnight-review` (`{reviewId, action: seen|dismiss}`) · `GET /api/calendar/connection`. Job routes also accept `GET`. Task writes accept `dueDate` + `dueTime` (+ `dueTimezone`) as zone-aware wall-clock input in addition to `dueAt`; `PATCH` accepts `expectedVersion` and responds `{task, nextTask}`. Error shape: `{error:{code,message,details?,requestId}}`.
+
+### 12.5 Processing refinements
+
+* **Deadline engine:** candidate select → per-task transaction → `SELECT … FOR UPDATE` → recheck status + `due_at` equality + overdue → `INSERT … ON CONFLICT DO NOTHING`. Entry points: scheduler and per-user reconcile.
+* **Midnight review:** `reviewTargetFor(now, tz)` yields `(localDate, boundary, previousBoundary)`. Population = pending tasks with `due_at <= boundary` + calendar events that ended by the boundary and are undecided and non-cancelled. Reads never create reviews (`GET` is side-effect free).
+* **Calendar sync:** ±30-day window, `singleEvents=true` (recurring events arrive as instances with distinct ids), `showDeleted=true`, `fields` mask excludes description/attendees; one transaction per sync; decisions preserved across re-sync unless Google cancels. Derived statuses (`upcoming`/`past_pending_review`) are recomputed on read.
+* **Dialogue:** deterministic fallback is canonical; AI text, when valid, is cached once on the event payload.
+
+### 12.6 Folder structure actually used
+
+`src/app` (routes + `api`) · `src/components/{ui,layout,task,calendar,ghost,audio,midnight,workspace}` · `src/features/{tasks,hauntings,midnight-review,calendar,preferences}` (pure domain logic, no IO) · `src/lib/{datetime,client,logging}` · `src/server/{db,repositories,services,integrations/google-calendar,ai,auth}` · `supabase/migrations` · `tests/{unit,integration,e2e}` · `scripts`. No `src/types` folder was needed.
+
+### 12.7 Test-only seam
+
+`X-Test-Now` overrides the server clock only when `ABANDONMENT_ALLOW_TEST_CLOCK=1` and `VERCEL_ENV!=production` (`server/clock.ts`; unit-tested). It exists so end-to-end tests can simulate a passed deadline without waiting. It must never be enabled in a real deployment.
+

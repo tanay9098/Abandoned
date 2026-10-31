@@ -476,3 +476,40 @@ The design is accepted when:
 - The design works on desktop and mobile.
 - Empty, loading, error, and disconnected states are designed.
 - The interface remains usable when every supernatural effect is disabled.
+
+---
+
+## 16. Implementation Decisions (2026-10-30)
+
+Evidence-based deviations and concrete choices made while building; the sections above remain the intent.
+
+### 16.1 Contrast
+Computed WCAG ratios for the token palette (text on `--background` / `--surface` / `--surface-raised`):
+
+| Token | bg | surface | raised |
+|---|---|---|---|
+| `--text-primary` | 15.34 | 14.25 | 13.09 |
+| `--text-secondary` | 7.82 | 7.26 | 6.67 |
+| `--text-muted` as specified `#737582` | 4.22 | **3.92** | **3.60** |
+| `--text-muted` as built `#8A8C99` | 5.78 | 5.37 | 4.93 |
+| `--spectral` | 9.08 | 8.44 | 7.75 |
+| `--danger` | 7.75 | 7.19 | 6.61 |
+| `--success` / `--warning` | 10.64 / 10.12 | 9.88 / 9.40 | 9.07 / 8.64 |
+
+The specified muted colour fails 4.5:1 on surfaces, and it is used for timestamps and metadata that carry meaning, so it was raised to `#8A8C99`. Primary-button text `--on-spectral #15112A` on `--spectral` = 8.63:1. These are token-level computations; no page-level automated audit has been run.
+
+### 16.2 Ghost
+No Rive asset (ADR-014): the ghost is an original inline SVG (asymmetric hem, uneven arm stub, violet rim) animated by Motion through the seven states in §7 via a single `GhostCharacter` component; idle blink is a CSS keyframe. Released shows six spectral particles (skipped in reduced motion). The animated layer sits in an error boundary whose fallback is the static art.
+
+### 16.3 Layout and screens
+Left rail ≥ 1024 px with a bottom bar below; contextual haunting panel ≥ 1280 px, otherwise “Inspect” opens the task’s detail page (the dedicated-page option in §5). Nav: Today · Upcoming · Calendar · Graveyard · Settings. Overdue rows use a 2 px spectral-soft left edge and darker surface, with `OVERDUE · 03H 18M` in DM Mono — no red badges. Calendar events use a dashed border and an explicit source line (`DEMO CALENDAR (SAMPLE DATA)` or `GOOGLE CALENDAR`) and are labelled “Awaiting your review”, never “missed”, until the user answers.
+
+### 16.4 Midnight review
+A dialog over a 90 % ink overlay: a small clock mark at 12, serif headline (`Three unfinished tasks followed you into tomorrow.`), the line “The day has changed. These commitments remain.”, up to three small ghosts, per-task Complete / Reschedule / Release, and “Open my task list” / “Skip”. The ~2 s staggered reveal is visual only (all text is in the DOM at once) and collapses to a plain fade under reduced motion. Esc and Skip dismiss it; the Graveyard replays it.
+
+### 16.5 Sound and motion defaults
+Sound, ambient wind and AI dialogue are **off** by default. Midnight chimes play at 55 % of the user volume; ambient at 35 %. Automatic cues (ghost arrival, midnight) obey quiet hours and the browser’s autoplay rule; cues from the user’s own actions still play. Reduced motion is honoured from both the OS media query and an in-app toggle (`html[data-reduced-motion]`) and is independent of sound.
+
+### 16.6 Typography
+Manrope (UI), DM Mono (metadata), Lora (ghost voice) via Fontsource (local files, no build-time network). Light mode is **not** implemented (dark is the stated primary target); `color-scheme` is dark.
+
