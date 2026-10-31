@@ -60,7 +60,7 @@ the demo provider is off unless `GOOGLE_CALENDAR_MOCK=1`.
 
 ### Optional AI ghost dialogue (open-weight Gemma)
 
-Off by default and never required. The ghost's lines can be written by Google's open-weight **Gemma** model through any
+Off by default (except demo archives) and never required. The ghost's lines can be written by Google's open-weight **Gemma** model through any
 **OpenAI-compatible** Chat Completions endpoint, so the same code runs fully local or hosted:
 
 | Where | `AI_BASE_URL` | `AI_MODEL` | `AI_API_KEY` |
@@ -69,7 +69,7 @@ Off by default and never required. The ghost's lines can be written by Google's 
 | Google AI Studio | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemma-3-27b-it` | AI Studio key |
 | Hugging Face Inference Providers | `https://router.huggingface.co/v1` | `google/gemma-3-27b-it` | HF token |
 
-llama.cpp `llama-server` and vLLM work the same way. Then switch it on in **Settings**. Local CPU inference is slower than the
+llama.cpp `llama-server` and vLLM work the same way. Archives started with *sample case files* have it switched on automatically (disclosed on the login page); everyone else turns it on in **Settings**. Local CPU inference is slower than the
 default 4 s timeout, so set `AI_TIMEOUT_MS=15000` there. Gemma has no system role, so the instructions travel in the single user turn,
 with the title fenced in `<task_title>` tags as untrusted data. Only the task *title* and a coarse overdue duration are sent —
 never descriptions or Calendar content. Output is length/tone-validated; any failure, timeout, rate-limit or unsafe reply falls back

@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/server/db/types";
 import { processDeadlines } from "@/server/services/deadline.service";
 import { dialogueFor } from "@/server/services/haunting.service";
-import { updatePreferences } from "@/server/services/preferences.service";
+import { readPreferences, updatePreferences } from "@/server/services/preferences.service";
+import { seedDemoData } from "@/server/services/demo.service";
 import { listGhostEvents } from "@/server/repositories/ghost-events.repo";
 import { buildMessages, generateDialogue, sanitizeTitle, validateDialogue } from "@/server/ai/dialogue";
 import { resetRateLimits } from "@/lib/rate-limit";
@@ -95,6 +96,26 @@ describe("generateDialogue provider handling", () => {
     const f = reply("This should never be called, honestly.");
     expect(await generateDialogue({ title: "t", overdueMs: 1 }, { baseUrl: "", fetchImpl: f as never })).toBeNull();
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("demo archives", () => {
+  it("start with AI dialogue on; plain archives keep it off", async () => {
+    const demo = await newUser(db);
+    await seedDemoData(db, demo.id, T0);
+    expect((await readPreferences(db, demo.id)).aiDialogueEnabled).toBe(true);
+    const plain = await newUser(db);
+    expect((await readPreferences(db, plain.id)).aiDialogueEnabled).toBe(false);
+  });
+
+  it("a demo haunting gets Gemma-written dialogue without touching Settings", async () => {
+    const u = await newUser(db);
+    await seedDemoData(db, u.id, T0);
+    const [ev] = await listGhostEvents(db, u.id, { types: ["deadline_missed"] });
+    const f = reply("This has been waiting a while. Finish it, move it, or let it go?");
+    const r = await dialogueFor(db, u.id, ev!.id, T0, { ...AI, fetchImpl: f as never });
+    expect(r.source).toBe("ai");
+    expect(f).toHaveBeenCalledTimes(1);
   });
 });
 

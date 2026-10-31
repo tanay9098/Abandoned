@@ -68,7 +68,7 @@ export default function LoginPage() {
           <Checkbox id="seed" checked={seed} onCheckedChange={(c) => setSeed(c === true)} />
           <div>
             <Label htmlFor="seed" className="!mb-0.5 text-fg">Start with sample case files</Label>
-            <p className="text-[13px] text-muted">Adds a few tasks, some already overdue, so you can meet a ghost right away.</p>
+            <p className="text-[13px] text-muted">Adds a few tasks, some already overdue, so you can meet a ghost right away. Also turns on AI-written ghost lines from the open-weight Gemma model, which sees only task titles. You can switch that off in Settings.</p>
           </div>
         </div>
         <FieldError>{error}</FieldError>
