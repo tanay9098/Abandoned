@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/server/db/types";
 import { processDeadlines } from "@/server/services/deadline.service";
 import { dialogueFor } from "@/server/services/haunting.service";
-import { updatePreferences } from "@/server/services/preferences.service";
+import { readPreferences, updatePreferences } from "@/server/services/preferences.service";
+import { seedDemoData } from "@/server/services/demo.service";
 import { listGhostEvents } from "@/server/repositories/ghost-events.repo";
 import { buildMessages, generateDialogue, sanitizeTitle, validateDialogue } from "@/server/ai/dialogue";
 import { resetRateLimits } from "@/lib/rate-limit";
@@ -14,7 +15,10 @@ beforeAll(async () => {
 });
 afterAll(() => db.close());
 
-const reply = (text: string, status = 200) => vi.fn(async () => new Response(JSON.stringify({ content: [{ type: "text", text }] }), { status }));
+// OpenAI-compatible Chat Completions response (Ollama, Google AI Studio, Hugging Face, vLLM...).
+const reply = (text: string, status = 200) =>
+  vi.fn(async () => new Response(JSON.stringify({ choices: [{ index: 0, message: { role: "assistant", content: text } }] }), { status }));
+const AI = { baseUrl: "http://gemma.test/v1" };
 
 async function haunted(title = "Write report") {
   const u = await newUser(db);
@@ -55,23 +59,63 @@ describe("prompt construction treats the title as untrusted data", () => {
 });
 
 describe("generateDialogue provider handling", () => {
-  it("returns validated text on success and sends the key only as a header", async () => {
+  it("calls the OpenAI-compatible endpoint, returns validated text, and sends the key only as a header", async () => {
     const f = reply("This one slipped by. Want to finish it, move it, or set it down?");
-    const out = await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "sk-test", fetchImpl: f as never });
+    const out = await generateDialogue({ title: "t", overdueMs: 1 }, { baseUrl: "http://gemma.test/v1/", apiKey: "sk-test", model: "gemma3:4b", fetchImpl: f as never });
     expect(out).toMatch(/slipped/);
-    const init = (f.mock.calls[0] as unknown[])[1] as RequestInit;
-    expect((init.headers as Record<string, string>)["x-api-key"]).toBe("sk-test");
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://gemma.test/v1/chat/completions");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer sk-test");
+    const body = JSON.parse(String(init.body));
+    expect(body.model).toBe("gemma3:4b");
     expect(String(init.body)).not.toContain("sk-test");
   });
-  it("returns null on provider errors, malformed bodies, unsafe output and timeouts", async () => {
-    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "k", fetchImpl: reply("x", 500) as never })).toBeNull();
-    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "k", fetchImpl: (async () => new Response("not json")) as never })).toBeNull();
-    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "k", fetchImpl: reply("You are worthless and lazy.") as never })).toBeNull();
-    const hang = (async (_u: string, init: RequestInit) => new Promise((_r, rej) => init.signal!.addEventListener("abort", () => rej(new Error("aborted"))))) as never;
-    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "k", fetchImpl: hang, timeoutMs: 20 })).toBeNull();
+  it("folds instructions into one user turn (Gemma has no system role)", async () => {
+    const f = reply("This one slipped by. Want to finish it, move it, or set it down?");
+    await generateDialogue({ title: "Water plants", overdueMs: 1 }, { ...AI, fetchImpl: f as never });
+    const body = JSON.parse(String(((f.mock.calls[0] as unknown[])[1] as RequestInit).body));
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0].role).toBe("user");
+    expect(body.messages[0].content).toMatch(/untrusted DATA[\s\S]*<task_title>Water plants<\/task_title>/);
   });
-  it("returns null with no API key (core app unaffected)", async () => {
-    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { apiKey: "" })).toBeNull();
+  it("works without an API key (local Ollama) and sends no authorization header", async () => {
+    const f = reply("This one slipped by. Want to finish it, move it, or set it down?");
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, apiKey: "", fetchImpl: f as never })).toMatch(/slipped/);
+    const init = (f.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+  it("returns null on provider errors, malformed bodies, unsafe output and timeouts", async () => {
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, fetchImpl: reply("x", 500) as never })).toBeNull();
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, fetchImpl: (async () => new Response("not json")) as never })).toBeNull();
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, fetchImpl: (async () => new Response(JSON.stringify({ choices: [] }))) as never })).toBeNull();
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, fetchImpl: reply("You are worthless and lazy.") as never })).toBeNull();
+    const hang = (async (_u: string, init: RequestInit) => new Promise((_r, rej) => init.signal!.addEventListener("abort", () => rej(new Error("aborted"))))) as never;
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { ...AI, fetchImpl: hang, timeoutMs: 20 })).toBeNull();
+  });
+  it("returns null with no model endpoint configured (core app unaffected)", async () => {
+    const f = reply("This should never be called, honestly.");
+    expect(await generateDialogue({ title: "t", overdueMs: 1 }, { baseUrl: "", fetchImpl: f as never })).toBeNull();
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("demo archives", () => {
+  it("start with AI dialogue on; plain archives keep it off", async () => {
+    const demo = await newUser(db);
+    await seedDemoData(db, demo.id, T0);
+    expect((await readPreferences(db, demo.id)).aiDialogueEnabled).toBe(true);
+    const plain = await newUser(db);
+    expect((await readPreferences(db, plain.id)).aiDialogueEnabled).toBe(false);
+  });
+
+  it("a demo haunting gets Gemma-written dialogue without touching Settings", async () => {
+    const u = await newUser(db);
+    await seedDemoData(db, u.id, T0);
+    const [ev] = await listGhostEvents(db, u.id, { types: ["deadline_missed"] });
+    const f = reply("This has been waiting a while. Finish it, move it, or let it go?");
+    const r = await dialogueFor(db, u.id, ev!.id, T0, { ...AI, fetchImpl: f as never });
+    expect(r.source).toBe("ai");
+    expect(f).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -79,10 +123,10 @@ describe("dialogueFor", () => {
   it("uses deterministic fallback by default (AI disabled by preference)", async () => {
     const { u, ev, now } = await haunted();
     const f = reply("This should never be called, honestly.");
-    const r = await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: f as never });
+    const r = await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: f as never });
     expect(r.source).toBe("fallback");
     expect(f).not.toHaveBeenCalled();
-    const again = await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: f as never });
+    const again = await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: f as never });
     expect(again.text).toBe(r.text);
   });
 
@@ -90,9 +134,9 @@ describe("dialogueFor", () => {
     const { u, ev, now } = await haunted();
     await updatePreferences(db, u.id, { aiDialogueEnabled: true }, now);
     const f = reply("It has been a few hours. Shall we finish it, move it, or let it go?");
-    const r = await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: f as never });
+    const r = await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: f as never });
     expect(r.source).toBe("ai");
-    const r2 = await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: f as never });
+    const r2 = await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: f as never });
     expect(r2).toEqual(r);
     expect(f).toHaveBeenCalledTimes(1);
   });
@@ -107,7 +151,7 @@ describe("dialogueFor", () => {
     const [ev] = await listGhostEvents(db, u.id, { types: ["deadline_missed"] });
     await updatePreferences(db, u.id, { aiDialogueEnabled: true }, now);
     const f = reply("It has been a couple of hours. Finish it, move it, or let it go?");
-    await dialogueFor(db, u.id, ev!.id, now, { apiKey: "k", fetchImpl: f as never });
+    await dialogueFor(db, u.id, ev!.id, now, { ...AI, fetchImpl: f as never });
     const sent = String(((f.mock.calls[0] as unknown[])[1] as RequestInit).body);
     expect(sent).toContain("Public title");
     expect(sent).not.toContain("SECRET");
@@ -116,7 +160,7 @@ describe("dialogueFor", () => {
   it("falls back when the provider fails or returns unsafe text", async () => {
     const { u, ev, now } = await haunted();
     await updatePreferences(db, u.id, { aiDialogueEnabled: true }, now);
-    const r = await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: reply("You are such a failure.") as never });
+    const r = await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: reply("You are such a failure.") as never });
     expect(r.source).toBe("fallback");
     expect(r.text.length).toBeGreaterThan(10);
   });
@@ -129,7 +173,7 @@ describe("dialogueFor", () => {
     let limited = false;
     for (let i = 0; i < 25; i++) {
       try {
-        await dialogueFor(db, u.id, ev.id, now, { apiKey: "k", fetchImpl: f as never });
+        await dialogueFor(db, u.id, ev.id, now, { ...AI, fetchImpl: f as never });
       } catch (e) {
         limited = (e as { status?: number }).status === 429;
         break;

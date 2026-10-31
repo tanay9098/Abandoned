@@ -59,33 +59,53 @@ export function validateDialogue(raw: unknown): string | null {
 
 export interface GenerateOptions {
   fetchImpl?: typeof fetch;
+  /** OpenAI-compatible base URL, e.g. http://localhost:11434/v1 (Ollama). Defaults to AI_BASE_URL. */
+  baseUrl?: string;
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
 }
 
+/** AI is available when an OpenAI-compatible endpoint is configured (a key is optional: local Ollama needs none). */
 export function aiAvailable(): boolean {
-  return !!env().ANTHROPIC_API_KEY;
+  return !!env().AI_BASE_URL;
 }
 
-/** Returns validated dialogue or null (no key, timeout, provider error, malformed/unsafe output). */
+/**
+ * Calls an open-weight model (Gemma by default) through any OpenAI-compatible Chat Completions endpoint:
+ * Ollama / llama.cpp / vLLM locally, or a hosted provider (Google AI Studio, Hugging Face, ...).
+ *
+ * Gemma has no system role, and some hosts reject one for Gemma models, so the instructions are sent as
+ * the first part of the single user turn. The title is still fenced in <task_title> tags as untrusted data.
+ *
+ * Returns validated dialogue or null (not configured, timeout, provider error, malformed/unsafe output).
+ */
 export async function generateDialogue(ctx: DialogueContext, o: GenerateOptions = {}): Promise<string | null> {
-  const apiKey = o.apiKey ?? env().ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  const e = env();
+  const baseUrl = (o.baseUrl ?? e.AI_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  if (!baseUrl) return null;
+  const apiKey = o.apiKey ?? e.AI_API_KEY;
   const { system, user } = buildMessages(ctx);
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), o.timeoutMs ?? 4000);
+  const timer = setTimeout(() => ctrl.abort(), o.timeoutMs ?? e.AI_TIMEOUT_MS);
   try {
-    const res = await (o.fetchImpl ?? fetch)("https://api.anthropic.com/v1/messages", {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+    const res = await (o.fetchImpl ?? fetch)(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: o.model ?? env().AI_MODEL, max_tokens: 120, system, messages: [{ role: "user", content: user }] }),
+      headers,
+      body: JSON.stringify({
+        model: o.model ?? e.AI_MODEL,
+        messages: [{ role: "user", content: `${system}\n\n${user}` }],
+        max_tokens: 120,
+        temperature: 0.8,
+        stream: false,
+      }),
       signal: ctrl.signal,
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { content?: { type?: string; text?: string }[] };
-    const block = body.content?.find((b) => b.type === "text");
-    return validateDialogue(block?.text);
+    const body = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
+    return validateDialogue(body.choices?.[0]?.message?.content);
   } catch {
     return null;
   } finally {

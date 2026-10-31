@@ -200,7 +200,8 @@ Never silently change an accepted architectural decision. Add a new ADR explaini
 - **Decision:** No `googleapis` SDK. OAuth 2.0 code flow with PKCE and a signed, single-use, session-bound state cookie; tokens AES-256-GCM encrypted (`node:crypto`); `events.list` with `singleEvents=true`, `showDeleted=true` and a `fields` mask that excludes descriptions/attendees. Scope narrower than the doc’s example `calendar.readonly`.
 - **Alternatives:** `googleapis` (very large dependency for one endpoint). **Consequence:** only mocked-HTTP verification.
 
-### ADR-016 — Optional AI via Anthropic Messages API over `fetch`
+### ADR-016 — Optional AI via an open-weight model (Gemma) over an OpenAI-compatible endpoint
+- **Revision (2026-10-31):** Switched from the Anthropic Messages API to the OpenAI-compatible Chat Completions shape so the ghost runs on open-weight **Gemma** (the DEV challenge asks for open-source AI at the core). Configured by `AI_BASE_URL` / `AI_API_KEY` (optional) / `AI_MODEL` (default `gemma3:4b`) / `AI_TIMEOUT_MS`; works with local Ollama/llama.cpp/vLLM or hosted Google AI Studio / Hugging Face. Instructions are folded into the single user turn because Gemma has no system role. `render.yaml` deploys it on Render. Demo archives (signed in with sample case files) start with `aiDialogueEnabled = true` so judges hear the model without visiting Settings; disclosed on the login page and reversible in Settings. Non-demo archives remain opt-in.
 - **Decision:** Provider-agnostic `generateDialogue` returning validated text or `null`; no SDK, no tools, no autonomy. Sends title + coarse overdue duration only; AI is opt-in per user (disclosed in Settings), rate-limited, 4 s timeout, output validated (length, tone denylist, no URLs/markdown/emoji/injection echoes), cached once per haunting.
 
 ### ADR-017 — Reconciliation endpoint and test clock

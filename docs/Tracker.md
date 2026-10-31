@@ -146,12 +146,12 @@ Legend used below: `[x]` DONE · `[~]` IN REVIEW (implemented; a stated part of 
 
 ## 10. Phase 8 — AI Dialogue (Optional MVP Feature) — IN REVIEW (live provider unverified)
 
-- [x] Provider: Anthropic Messages API over `fetch` (ADR-016); minimum context (title + coarse duration); disclosure in Settings; opt-in.
+- [x] Provider: open-weight Gemma via any OpenAI-compatible endpoint over `fetch` (ADR-016, revised 2026-10-31); minimum context (title + coarse duration); disclosure in Settings; opt-in.
 - [x] Output validation (length/tone/format/injection echo) · malformed and unsafe outputs tested.
 - [x] Unavailable providers, timeouts, rate limits → deterministic fallback.
 - [x] External event descriptions never requested, stored or sent.
 - [x] Core functionality works without AI (default; e2e).
-- [~] A real provider call was **not** made (no API key). Request shape follows the public Messages API; response handling is tested with mocked HTTP.
+- [~] A real provider call was **not** made (no Gemma endpoint in the sandbox). Request shape follows the OpenAI Chat Completions API; response handling is tested with mocked HTTP.
 
 ---
 
@@ -209,7 +209,7 @@ Build the smallest complete and testable Abandonment experience. — **Achieved 
 |---|---|---|---|---|---|
 | B1 | No Google OAuth client/credentials | 4 | Live OAuth, token refresh/revoke unverified | Owner’s Google Cloud project; set `GOOGLE_*` + `TOKEN_ENCRYPTION_KEY` | Open |
 | B2 | No Supabase project / `DATABASE_URL` | 2, 3 | `pg` driver + hosted migration path unverified live (SQL itself verified on PGlite) | Supabase project; `npm run db:migrate` | Open |
-| B3 | No AI provider key | 8 | Live AI path unverified | `ANTHROPIC_API_KEY` | Open (optional feature) |
+| B3 | No Gemma endpoint (Ollama / AI Studio key) | 8 | Live AI path unverified | `AI_BASE_URL` (+ `AI_API_KEY` if hosted) | Open (optional feature) |
 | B4 | No audio device / assistive tech in sandbox | 6, 9 | Audible quality and screen-reader behaviour unverified | Manual pass in a real browser | Open |
 | B5 | Commit not authorised | 10 | — | Owner authorised on 2026-10-31 | Resolved (`78d0df6`) |
 
