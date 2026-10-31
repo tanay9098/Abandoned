@@ -179,7 +179,7 @@ Legend used below: `[x]` DONE · `[~]` IN REVIEW (implemented; a stated part of 
 - [ ] Record a complete user journey — **NOT DONE** (no screen recording possible in the sandbox).
 - [x] Verify no secrets are committed (pattern scan; `.env*` git-ignored).
 - [x] Verify asset licences and attribution (all original/CC0; fonts OFL).
-- [ ] Review Git history — **NOT DONE**: nothing is committed (see §15).
+- [~] Review Git history — one implementation commit (`78d0df6`) on top of `2577531`; history not otherwise reviewed.
 - [ ] Verify the project meets the challenge requirements against the live DEV rules — not done.
 - [ ] Prepare the submission write-up — **NOT STARTED** (README exists; the DEV post does not).
 
@@ -211,7 +211,7 @@ Build the smallest complete and testable Abandonment experience. — **Achieved 
 | B2 | No Supabase project / `DATABASE_URL` | 2, 3 | `pg` driver + hosted migration path unverified live (SQL itself verified on PGlite) | Supabase project; `npm run db:migrate` | Open |
 | B3 | No AI provider key | 8 | Live AI path unverified | `ANTHROPIC_API_KEY` | Open (optional feature) |
 | B4 | No audio device / assistive tech in sandbox | 6, 9 | Audible quality and screen-reader behaviour unverified | Manual pass in a real browser | Open |
-| B5 | Commit not authorised | 10 | Work exists only in the working tree | Owner decision (see `memory.md` §9) | Open |
+| B5 | Commit not authorised | 10 | — | Owner authorised on 2026-10-31 | Resolved (`78d0df6`) |
 
 ---
 
@@ -236,12 +236,12 @@ Do not mark future phases complete simply because earlier phases were completed.
 - **Current phase:** 10 — Submission readiness (Phases 0–9 implemented; see per-phase notes for unverified parts).
 - **Last completed task:** Full verification run and documentation pass (2026-10-30).
 - **Current task:** None in progress.
-- **Next task (priority order):** (1) decide on committing/pushing; (2) live Supabase + Google verification (B1/B2); (3) manual keyboard + screen-reader + audio pass (B4); (4) screen-record the demo journey; (5) write the DEV submission post; (6) consider swapping guest auth for Supabase Auth (ADR-011).
+- **Next task (priority order):** (1) open a PR when ready (not created); (2) live Supabase + Google verification (B1/B2); (3) manual keyboard + screen-reader + audio pass (B4); (4) screen-record the demo journey; (5) write the DEV submission post; (6) consider swapping guest auth for Supabase Auth (ADR-011).
 - **Tests passed:** `npm run lint` (exit 0) · `npm run typecheck` (exit 0) · `npm test` (15 files / 174 tests) · `npm run build` · `npm run test:e2e` (13/13).
 - **Tests failed or not run:** None failing. Not run: anything needing live Supabase / Google / AI credentials, audible audio, screen readers (see blockers).
 - **Current blockers:** B1–B5 above.
 - **Files changed:** Entire application (greenfield): `src/**`, `tests/**`, `scripts/**`, `supabase/migrations/**`, `public/sounds/**`, config files, `.github/workflows/**`, `README.md`, and `docs/{memory,Tracker,Architecture,Design}.md`.
-- **Latest commit:** None created by this session (base `2577531`).
+- **Latest commit:** `78d0df6` (pushed to `origin/claude/jolly-planck-yml8nu`; base `2577531`).
 - **Documentation updated:** README, `memory.md`, `Tracker.md`, `Architecture.md` §12, `Design.md` §16. `PRD.md` unchanged (no requirement changed). `Rules.md` unchanged.
 
 Use actual repository evidence. Do not invent progress.

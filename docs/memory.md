@@ -140,7 +140,7 @@ Append one entry for every meaningful change.
 - **Tests executed:** see §8 (all actually run; results recorded there).
 - **Manual verification:** screenshots of dashboard, midnight review, calendar, settings and a 390 px mobile viewport were inspected; one visual defect (cramped mobile task rows) was found and fixed. Zero-config dev mode (`.data/pglite`) verified to persist across a server restart. Production boot without `SESSION_SECRET`/`CRON_SECRET` verified to refuse requests.
 - **Known limitations:** see README “Known limitations” and Tracker.
-- **Commit:** Not committed (see §9).
+- **Commit:** `78d0df6` (see §9).
 - **Follow-up:** live Supabase + Google verification; screen-reader audit; demo recording.
 
 #### Defects found by verification during this session (recorded, not hidden)
@@ -310,7 +310,7 @@ If a command fails, record the failure and whether it was resolved. Do not repla
 
 | Date | Commit hash | Summary | Related changes | Verification |
 |---|---|---|---|---|
-| — | — | **No commits made by this session.** Work exists only in the working tree on branch `claude/jolly-planck-yml8nu` (base `2577531`). | CHANGE-20261030-001 | — |
+| 2026-10-31 | `78d0df6` | Implement Abandonment MVP (authorised by the owner; pushed to `origin/claude/jolly-planck-yml8nu`) | CHANGE-20261030-001 | lint, typecheck, 174 unit/integration tests, build, 13 e2e all run before the commit |
 
 Rules:
 - Read real Git history to recover commit hashes.
