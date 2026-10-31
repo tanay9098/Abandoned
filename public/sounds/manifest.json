@@ -1,0 +1,13 @@
+{
+  "description": "Sound asset manifest. Every file is original, procedurally synthesised by scripts/generate-sounds.mjs (seeded, reproducible). No third-party recordings are used.",
+  "license": "CC0-1.0",
+  "attribution": "Not required",
+  "assets": [
+    { "file": "wind.wav", "event": "ambient", "source": "scripts/generate-sounds.mjs (filtered noise, seamless 8 s loop)", "license": "CC0-1.0" },
+    { "file": "whoosh.wav", "event": "ghost-awakens", "source": "scripts/generate-sounds.mjs (swept band-passed noise)", "license": "CC0-1.0" },
+    { "file": "midnight-chimes.wav", "event": "midnight-review", "source": "scripts/generate-sounds.mjs (three inharmonic bell strikes, low-passed)", "license": "CC0-1.0" },
+    { "file": "whisper.wav", "event": "ghost-interaction", "source": "scripts/generate-sounds.mjs (breathy formant-filtered noise, no speech)", "license": "CC0-1.0" },
+    { "file": "complete.wav", "event": "task-completed", "source": "scripts/generate-sounds.mjs (two-note fading chime)", "license": "CC0-1.0" },
+    { "file": "release.wav", "event": "task-released", "source": "scripts/generate-sounds.mjs (descending sine sweep)", "license": "CC0-1.0" }
+  ]
+}
